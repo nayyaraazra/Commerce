@@ -29,6 +29,8 @@ class AuctionList(models.Model):
        upload_to ="images/", blank = True, null = True 
     )
 
+    image_url = models.URLField(blank=True, null=True)
+
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, related_name="listings",  blank = True, null = True 
     )

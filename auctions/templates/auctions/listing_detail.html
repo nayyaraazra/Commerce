@@ -2,12 +2,18 @@
 
 {% block body %}
 
+{% if error %}
+  <p style="color: red;"><strong>Error:</strong> {{ error }}</p>
+{% endif %}
+
 <h1>{{ listing.title }}</h1>
 
 {% if listing.image %}
   <img src="{{ listing.image.url }}" width="300">
+{% elif listing.image_url %}
+  <img src="{{ listing.image_url }}" width="300">
 {% else %}
-    <p>No image provided</p>
+  <p>No image provided</p>
 {% endif %}
 
 <p>{{ listing.description }}</p>
@@ -43,8 +49,8 @@
     {% endif %}
 {% endif %}
 
-{% if not listing.is_active and listing.winner == request.user %}
-    <p>You won this auction!</p>
+{% if not listing.is_active and is_winner %}
+    <p><strong>🎉 You won this auction!</strong></p>
 {% endif %}
 
 <h4><p>Bid Created At: {{ listing.date_posted|date:"M d, Y" }}</p></h4>
@@ -75,7 +81,7 @@
   <p>
     <strong>{{ comment.commenter.username }}</strong><br>
     {{ comment.comment_text }}<br>
-    <small>{{ comment.created_at|date:"M d, Y H:i" }}</small>
+    <small>{{ comment.timestamp|date:"M d, Y H:i" }}</small>
   </p>
 {% empty %}
   <p>No comments yet.</p>
@@ -101,7 +107,7 @@
 {% if user == listing.owner and listing.is_active %}
   <form method="post">
     {% csrf_token %}
-    <button type="submit" name="close">Close Auction</button>
+    <button type="submit" name="action" value="close">Close Auction</button>
   </form>
 {% endif %}
 

@@ -31,14 +31,21 @@
     <label>Current Image</label><br>
     {% if listing.image %}
       <img src="{{ listing.image.url }}" width="200"><br>
+    {% elif listing.image_url %}
+      <img src="{{ listing.image_url }}" width="200"><br>
     {% else %}
       <p>No image</p>
     {% endif %}
   </div>
 
   <div>
-    <label>Change Image</label><br>
+    <label>Change Image (upload)</label><br>
     <input type="file" name="image">
+  </div>
+
+  <div>
+    <label>Or change Image URL (optional)</label><br>
+    <input type="url" name="image_url" value="{{ listing.image_url|default:'' }}" placeholder="https://example.com/image.jpg">
   </div>
 
   <div>

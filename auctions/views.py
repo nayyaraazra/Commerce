@@ -78,9 +78,10 @@ def register(request):
 #     })
 
 def listing_detail(request, listing_id):
-    # 1. Get the listing safely, get listing_id from url
+    # 1. Get the listing safely, listing_id from url
     listing = get_object_or_404(AuctionList, pk=listing_id)
     # listing = AuctionList.objects.get(id=listing_id)
+
     # 2. Get related data
     bids = listing.bids.order_by("-bid_amount")
     comments = listing.comments.order_by("-timestamp")
@@ -109,117 +110,67 @@ def listing_detail(request, listing_id):
     error_message = None
 
     if request.method == "POST":
+        if not request.user.is_authenticated:
+            return redirect("login")
+
         action = request.POST.get("action")
 
-         # COMMENT
-        if action == "comment":
-            text = request.POST.get("comment")
+        # A. Place bid
+        if action == "bid":
+            if not listing.is_active:
+                error_message = "This auction is closed."
+            else:
+                raw_amount = request.POST.get("bid")
+                try:
+                    bid_amount = Decimal(raw_amount)
+                except Exception:
+                    error_message = "Invalid bid amount."
+                else:
+                    if bid_amount < listing.starting_bid:
+                        error_message = "Bid must be at least the starting bid."
+                    elif highest_bid and bid_amount <= highest_bid.bid_amount:
+                        error_message = "Bid must be greater than the current highest bid."
+                    else:
+                        Bid.objects.create(
+                            bidder=request.user,
+                            listing=listing,
+                            bid_amount=bid_amount,
+                        )
+                        return redirect("listing_detail", listing_id=listing.id)
+
+        # B. Add comment
+        elif action == "comment":
+            text = request.POST.get("comment", "").strip()
             if text:
                 Comment.objects.create(
-                    listing=listing,
                     commenter=request.user,
-                    comment_text=text
-                )
-
-            # BID
-        elif action == "bid":
-            amount = request.POST.get("bid")
-            if amount:
-                Bid.objects.create(
                     listing=listing,
-                    bidder=request.user,
-                    bid_amount=amount
+                    comment_text=text,
                 )
-        return redirect("listing_detail", listing_id=listing.id)
+            return redirect("listing_detail", listing_id=listing.id)
 
-    if request.method == "POST" and request.user.is_authenticated:
+        # C. Close auction (owner only)
+        elif action == "close":
+            if is_owner and listing.is_active:
+                listing.is_active = False
+                if highest_bid:
+                    listing.winner = highest_bid.bidder
+                listing.save()
+            return redirect("listing_detail", listing_id=listing.id)
 
-        # A. Place bid
-        if "bid" in request.POST:
-            bid_amount = (request.POST.get("bid_amount"))
-
-            try:
-                bid_amount = float(bid_amount)
-            except (TypeError, ValueError):
-                error_message = "Invalid bid amount."
-            else:
-                if not listing.is_active:
-                    error_message = "This auction is closed."
-                elif bid_amount <= current_price:
-                    error_message = "Bid must be higher than current price."
-                else:
-                    Bid.objects.create(
-                        bidder=request.user,
-                        listing=listing,
-                        amount=bid_amount
-                    )
-                    return HttpResponseRedirect(
-                        reverse("listing_detail", args=[listing.id])
-                    )
-
-        # B. Toggle watchlist
-        elif "watchlist" in request.POST:
-            if request.user.is_authenticated and request.user != listing.owner:
-                if request.user in listing.watchlist.all():
-                    listing.watchlist.remove(request.user)
-                else:
-                    listing.watchlist.add(request.user)
-
-            return HttpResponseRedirect(
-                reverse("listing_detail", args=[listing.id])
-            )
-
-        # C. Add comment
-        elif "comment" in request.POST:
-            if request.user.is_authenticated:
-                content = request.POST.get("content")
-
-                if content:
-                    Comment.objects.create(
-                        author=request.user,
-                        listing=listing,
-                        # content=content`
-                        content = request.POST["comment"]
-                    )
-
-            return HttpResponseRedirect(
-                reverse("listing_detail", args=[listing.id])
-            )
-
-        # D. Close auction (owner only) - marked
-        elif "close" in request.POST and is_owner:
-            listing.is_active = False
-            
-            if highest_bid:
-                listing.winner = highest_bid.bidder
-            listing.save()
-
-            return HttpResponseRedirect(
-                reverse("listing_detail", args=[listing.id])
-            )
-        
-    if "close_auction" in request.POST:
-        if request.user == listing.owner:
-
-            highest_bid = listing.bids.order_by("-bid_amount").first()
-
-            if highest_bid:
-                listing.winner = highest_bid.bidder
-
-            listing.is_active = False
-            listing.save()
     # 6. Render page
     return render(request, "auctions/listing_detail.html", {
         "listing": listing,
         "current_price": current_price,
         "bids": bids,
-         "highest_bid": highest_bid,
+        "highest_bid": highest_bid,
         "comments": comments,
         "is_owner": is_owner,
         "is_watching": is_watching,
         "is_winner": is_winner,
         "error": error_message,
     })
+
 
 @login_required
 def create_listing(request):
@@ -234,7 +185,8 @@ def create_listing(request):
         description = request.POST.get("description")
         starting_bid = request.POST.get("starting_bid")
         image = request.FILES.get("image")
-        category_id =request.POST.get("category")
+        image_url = request.POST.get("image_url", "").strip() or None
+        category_id = request.POST.get("category")
         new_category = request.POST.get("new_category")
 
         category = None
@@ -244,16 +196,17 @@ def create_listing(request):
             )
         elif category_id:
             category = Category.objects.get(id=category_id)
-        
+
         listing = AuctionList.objects.create(
-            owner = request.user,
-            title = title,
+            owner=request.user,
+            title=title,
             description=description,
             starting_bid=starting_bid,
             image=image,
-            category=category
-            )
-        return redirect("index") # bkn return ke index.html
+            image_url=image_url,
+            category=category,
+        )
+        return redirect("index")
 
 @login_required
 def watchlist(request):
@@ -329,7 +282,7 @@ def edit_listing(request, listing_id):
         listing.description = request.POST.get("description")
         listing.starting_bid = request.POST.get("starting_bid")
 
-        # ---------- Category ----------
+        # Category 
         category_id = request.POST.get("category")
         new_category = request.POST.get("new_category")
 
@@ -341,9 +294,12 @@ def edit_listing(request, listing_id):
         else:
             listing.category = None
 
-        # ---------- Image ----------
+        # Image
         if request.FILES.get("image"):
             listing.image = request.FILES.get("image")
+
+        image_url = request.POST.get("image_url", "").strip() or None
+        listing.image_url = image_url
 
         listing.save()
 

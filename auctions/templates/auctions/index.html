@@ -12,6 +12,8 @@
 
               {% if listing.image %}
                 <img src="{{ listing.image.url }}" alt="{{ listing.title }}" style="max-width: 200px;">
+              {% elif listing.image_url %}
+                <img src="{{ listing.image_url }}" alt="{{ listing.title }}" style="max-width: 200px;">
               {% endif %}
 
           <p>{{ listing.description }}</p>

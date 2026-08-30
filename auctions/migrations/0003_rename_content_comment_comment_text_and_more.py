@@ -10,16 +10,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameField(
-            model_name='comment',
-            old_name='content',
-            new_name='comment_text',
-        ),
-        migrations.RenameField(
-            model_name='comment',
-            old_name='publisher',
-            new_name='commenter',
-        ),
         migrations.RemoveField(
             model_name='bid',
             name='amount',
